@@ -1,4 +1,4 @@
-# wget_biro
+# https://www.xc.hu/wget_biro 
 SZTE biro és biro2 feladatainak automatizált letöltése 
 
 wget_biro --help
