@@ -1,0 +1,100 @@
+#! /bin/bash
+
+# wget_biro  by KZG https://xc.hu 2018. nov. 11., vasárnap, 12.14.26 CET
+#2018. nov. 10., szombat, 13.41.23 CET => nov   10 15:49 
+protocol="https"; ubdomain=""; domainDir=".inf.u-szeged.hu/Hallg"; 
+
+#kikommentelve nem hasznalja
+conFile='.wget_biro_config.txt';
+
+
+pmtrS=`sed -e '/\(^protocol\|^ubdomain\|^domainDir\|^csop\|^hSaz\|^pw\)="[^"]*";/ !d'  "$conFile" 2>>/dev/null`;
+eval "$pmtrS"; pmtrH=`sed -e '/^domainDir/ d' <<<"$pmtrS" 2>>/dev/null`;
+
+msgS=("biro$domainDir (vagy biro2) aktuális feladatának paraméterezhetõ letöltése"$'\n'"$(basename $0) \"egyetlen http(s)link\", vagy paraméterezve:"$'\n-s ("":biro|"2":biro2|"valami":valami)'$'\n-a azonosító'$'\n-p password'$'\n-c csoport'$'\n-L minta.zip|feladat.pdf|riport.txt link alapján'$'\nZH vagy HF komplett letöltése'$'\nParaméter nélkül az aktuális könyvtár soron következõ számozott helyére másol'
+"parancs megléte szükséges"
+"Aktuális könyvtár subdomain:"
+"Adja meg csoportja kódját:"
+"Adja meg h-s azonosítóját:"
+"Írja be a jelszavát:"); let "kezdI=3";
+
+langlow="${LANG,,}"; # langlow="hu_hu.utf-8";
+let "z=0"; if [ "$langlow" != "${langlow/.utf/}" ]; then if [ $(iconv <<<""; echo $?) -eq 127 ]; then let "z=127"; msgS[1]="parancs nincs a rendszerben"; 
+else for ((i=0;i<${#msgS[@]};i++));do msgS[$i]=`iconv -c -f Windows-1250 -t "${langlow/*\./}" <<<"${msgS[$i]}" 2>/dev/null;`; done; fi;fi;
+
+pcS=(wget host sed sort tail diff basename dirname mkdir test);   if [ $z -eq 127 ]; then pcS[${#pcS[@]}]="iconv"; fi;
+for parancs in ${pcS[@]} ; do x=$($parancs <<<"" 2>/dev/null; echo $?); let "z|=$x";
+    if [ $x -eq 127 ]; then echo "$parancs ${msgS[1]}"; fi;done; if [ $z -eq 127 ]; then exit 1;fi;
+
+
+helpMSG="${msgS[0]}"; let "prOba=1";
+
+href="$1"; while [ $# -gt 0 ]; do
+
+case "$1" in
+("-s") ubdomain="$2";;
+("-a") hSaz="$2";;
+("-c") csop="$2";;
+("-p") pw="$2";;
+("-L") href="$2";;
+("-h") echo "$helpMSG";echo $pmtrH; exit 0;;
+("--help") echo "$helpMSG";echo $pmtrH; exit 0;;
+(*) if [ ${#2} -gt 0 ];then echo "shifted: $1 $2";fi;;
+esac;
+
+shift; shift; done;
+
+if [ ${#href} -gt 0 ] && [ ${href:0:4} == "http" ] ;then fS=`basename "$href" 2>>/dev/null`; 
+if [ "$fS" == "feladat.pdf" ] || [ "$fS" == "minta.zip" ] || [ "$fS" == "riport.txt" ]  ;then
+protocol="${href/:*}";fN="${href:${#protocol}+3}";
+if [ "$fS" == "riport.txt" ]  ;then  fN=`dirname "$fN"`; prOba=`basename "$fN"`;  fi; fN=`dirname "$fN"`; 
+hSaz=`basename "$fN"`;fN=`dirname "$fN"`;
+orS=`basename "$fN"`;fN=`dirname "$fN"`;
+csop=`basename "$fN"`;fN=`dirname "$fN"`;
+domainDir=".${fN#*.*}";
+    if [ ${#ubdomain} -eq 0 ] || [ "${ubdomain}" == "${fN/\.*}" ]; then ubdomain="${fN/\.*}";
+    else  echo "$helpMSG"$'\n'"${msgS[2]} \"$ubdomain\", nem egyezik a most megadottal: \"${fN/\.*}\""; exit 1;fi;
+else echo "$helpMSG"$'\nA megadott link csak feladat.pdf, minta.zip, vagy riport.txt lehet'; exit 1; fi;
+fi;
+
+if [ ${#ubdomain} -eq 0 ]; then ubdomain="biro"; fi; if [ ${#ubdomain} -lt 2 ]; then ubdomain="biro$ubdomain"; fi;
+hostE=$ubdomain$domainDir; hostE=`host "${hostE/\/*}";`;
+if [ "${hostE/NXDOMAIN/}" != "$hostE" ]; then echo "$hostE nincs ilyen domainDir"; exit 1; fi; 
+
+while [ ${#csop} -eq 0 ] || [ ${#hSaz} -eq 0 ] || [ ${#pw} -eq 0 ] ;do
+let "i=$kezdI"; for az in csop hSaz pw; do eval v=\$$az; if [ ${#v} -eq 0 ]; then echo -n "${msgS[$i]}";
+read -r U; eval "$az=\"$U\"";fi; let "i++";  done; done;
+
+outStr=`cat <<outStr
+protocol="$protocol";
+ubdomain="$ubdomain";
+domainDir="$domainDir";
+csop="$csop";
+hSaz="$hSaz";
+pw="$pw";
+outStr`
+if [ ${#conFile} -gt 0 ];then X=`echo "$outStr"|diff - "$conFile" 2>>/dev/null`; 
+    if [ $? -ne 0 ] || [ ${#X} -ne 0 ]; then  echo "$outStr" > "$conFile" 2>>/dev/null; fi;fi;
+
+
+if [ ${#orS} -eq 0 ]; then
+    orS=$(ls [0-9]* -d 2>>/dev/null|sort -n|tail -1); if [ ${#orS} -eq 0 ]; then orS=1;fi;
+    if test -f $orS/riport-${orS}_1.txt; then let "orS++"; fi; 
+fi;
+
+
+
+if ! test -d $orS; then mkdir $orS;fi;			 if test -d $orS; then cd  $orS; let "i=$prOba"; 
+    if ! test -f ../feladat-${orS}.pdf; then
+wget $protocol://$hSaz:${pw}@$ubdomain$domainDir/$csop/$orS/$hSaz/feladat.pdf -O ../feladat-${orS}.pdf -o /dev/null;
+if [ $(stat  -c %s ../feladat-${orS}.pdf ) -eq 0 ]; then rm  ../feladat-${orS}.pdf 2>>/dev/null; i=;
+else wget $protocol://$hSaz:${pw}@$ubdomain$domainDir/$csop/$orS/$hSaz/minta.zip -O ../minta-${orS}.zip -o /dev/null; fi;
+    fi;
+while [ ${#i} -gt 0 ]; do
+ wget $protocol://$hSaz:${pw}@$ubdomain$domainDir/$csop/$orS/$hSaz/$i/riport.txt -O riport-${orS}_$i.txt -o /dev/null; 
+if [ $(stat  -c %s riport-${orS}_$i.txt) -eq 0 ]; then rm riport-${orS}_$i.txt 2>>/dev/null; i=; else
+ wget $protocol://$hSaz:${pw}@$ubdomain$domainDir/$csop/$orS/$hSaz/$i/feladat.c -O feladat-${orS}_$i.c -o /dev/null;
+ let "i++"; fi;
+
+done; cd ..; echo "$protocol://$ubdomain$domainDir/$csop/$orS/$hSaz File lista:"; ls -l *-$orS.[pz]* $orS/* 2>>/dev/null; 		fi;
+
